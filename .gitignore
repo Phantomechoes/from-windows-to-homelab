@@ -41,3 +41,14 @@ private/
 .vscode/
 *.swp
 *~
+
+# Env templates may use these names. The ignore rules above still catch real env files.
+!.env.example
+!**/.env.example
+!*.example.env
+
+# Image archives and the static BusyBox copied into a build context.
+*.tar
+*.tar.gz
+*.oci
+busybox

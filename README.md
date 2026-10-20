@@ -4,11 +4,12 @@
 
 一台 2021 年的旧笔记本，如何从混乱的 Windows 开发环境，变成可以通过 Mac 随时远程管理的 Ubuntu 服务器。
 
-[![Phase 1](https://img.shields.io/badge/phase-1_before_Docker-2f6f4e)](ROADMAP.md)
+[![Phase 2](https://img.shields.io/badge/phase-2_Docker_running-2f6f4e)](ROADMAP.md)
+[![Docker Hub](https://img.shields.io/badge/Docker_Hub-not_reachable-8a5a00)](docs/11-docker-registry-troubleshooting.md)
 [![Ubuntu Server](https://img.shields.io/badge/Ubuntu_Server-26.04.1_LTS-E95420)](docs/02-ubuntu-installation.md)
 [![Access](https://img.shields.io/badge/access-Tailscale_%2B_SSH-111111)](docs/05-remote-access.md)
 
-记录日期：2026 年 10 月 20 日。这是一次真实的个人 Homelab 迁移，当前停在 Docker 正式安装之前。
+记录从 2026 年 10 月 20 日的 Phase 1 开始。Phase 1 把这台坏屏笔记本收成可以用 SSH 管理的 Ubuntu Server。Phase 2 已经装上 Docker，并在 Mac 浏览器里打开了服务器上的第一张网页。Docker Hub 仍然连不上。
 
 ---
 
@@ -26,7 +27,7 @@ Docker 还在下一章。这一章把地基打完。
 
 ## 这个仓库是做什么的
 
-把一台几乎不再使用 Windows 的旧笔记本，装成一台可以用 Mac 远程管理的 Ubuntu Server，并把 Docker 安装之前的真实步骤、报错和取舍记下来，供以后的自己和遇到类似情况的人查阅。
+把一台几乎不再使用 Windows 的旧笔记本，装成一台可以用 Mac 远程管理的 Ubuntu Server，并把已经发生的步骤、报错和取舍记下来，供以后的自己和遇到类似情况的人查阅。Phase 1 停在 Docker 之前。Phase 2 记录引擎、离线镜像和第一个网页。
 
 文档同时是三种东西：一段迁移故事，一份可以对照命令的 Linux 记录，以及一个还会继续更新的工程仓库。没有发生过的操作不会写成已经完成。
 
@@ -104,7 +105,7 @@ flowchart TD
   TailnetNode --> SshNode["SSH 到 xin-server"]
 ```
 
-图里的 Docker 节点是下一阶段。Phase 1 结束时，它还没有安装。
+图里的 Docker 节点是下一阶段。Phase 1 结束时，它还没有安装。这三张图保持当时的样子。Docker 跑起来之后的路径在下面的 Phase 2。
 
 ## 时间线
 
@@ -125,7 +126,9 @@ flowchart TD
 
 ## 现在到哪了
 
-Phase 1 完成的定义：Mac 执行 `ssh xin-server`，进入的是升级并重启之后的 `dev@xin-server`，内核是 `7.0.0-38-generic`。合盖不断开这条会话。校园网检测定时器处于 active。Docker 不在已安装清单里。
+Phase 1 完成的定义仍然有效：Mac 执行 `ssh xin-server`，进入的是升级并重启之后的 `dev@xin-server`，内核是 `7.0.0-38-generic`。合盖不断开这条会话。校园网检测定时器处于 active。
+
+Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Compose 已经跑通，Mac 浏览器通过 SSH 隧道打开了 hello-web。Docker Hub 的直接访问还没有恢复。
 
 - [x] Windows 备份与系统替换
 - [x] Ubuntu Server 安装
@@ -137,9 +140,11 @@ Phase 1 完成的定义：Mac 执行 `ssh xin-server`，进入的是升级并重
 - [x] 合盖不休眠
 - [x] 自动校园网检测 Timer
 - [x] 系统更新与重启验证
+- [x] Docker Engine 安装
+- [x] Docker Compose V2 与 Buildx
+- [x] 离线镜像、Compose 测试和第一个网页
 - [ ] 认证自然过期后的自动恢复完整实测
-- [ ] Docker Engine 安装
-- [ ] Docker Compose 部署
+- [ ] Docker Hub 直接访问
 - [ ] 数据库、API 等服务部署
 - [ ] 监控、备份和告警
 
@@ -164,6 +169,46 @@ Phase 1 完成的定义：Mac 执行 `ssh xin-server`，进入的是升级并重
 
 合盖配置也值得单独记住：外接电源下的合盖测试通过了。这几行 logind 配置不能证明每一台笔记本都不会睡。见 [笔记本当服务器](docs/06-laptop-as-server.md)。
 
+## Phase 2：Docker Hub 连不上？那就从零构建第一个容器
+
+**Phase 2 — Docker Is Running, Even When Docker Hub Isn't**
+
+我以为装上 Docker 就结束了。官方软件源在 `apt update` 时被对端重置，GPG 公钥却已经检查通过。换成 Ubuntu 官方源之后，引擎起来了：`docker.io` 29.1.3、Compose 2.40.3、Buildx 0.30.1。`docker` 服务是 `active (running)`，并且 enabled。
+
+然后 `sudo docker run --rm hello-world` 没有等到 Hello。本地没有镜像，解析 `docker.io/library/hello-world:latest` 时 `i/o timeout`。`registry-1.docker.io` 的解析结果不稳定，HTTPS 也超时。现象让人怀疑 DNS 或出去的路径有问题。证据不够把具体机制写成结论，所以 Docker Hub 保持未解决。引擎在运行，仓库连不上。这两句同时成立。
+
+于是不再等外部镜像。Ubuntu 的 `busybox-static` 放进 `FROM scratch`，`--pull=false` 构建，`--network none` 运行，终端打出 `Hello from Docker on xin-server!`。Compose 用 `pull_policy: never` 把同一张镜像跑完，退出码是 0。那次测试容器随后删掉了。
+
+目录先定在 `/srv/docker`：`stacks`、`data`、`secrets`。引擎自己的数据仍在 `/var/lib/docker`。`data` 目录不是备份。
+
+第一个一直开着的服务是 hello-web。BusyBox 的 `httpd` 只发布在服务器的 `127.0.0.1:8080`。Mac 上执行 `ssh -N -L 18080:127.0.0.1:8080 xin-server`，浏览器打开 `http://localhost:18080`，看见了 **Welcome to xin-server**。隧道关掉，浏览器这条路就断。容器还在。校园网上没有这个 8080。
+
+```mermaid
+flowchart LR
+  browser["Mac 浏览器 localhost:18080"] --> sshLocal["Mac 上的 SSH 客户端"]
+  sshLocal --> tailnet[Tailscale]
+  tailnet --> sshd["xin-server 的 sshd"]
+  sshd --> loopback["Ubuntu 127.0.0.1:8080"]
+  loopback --> web["BusyBox httpd 容器"]
+```
+
+详细命令在文档里，不堆在首页。
+
+| 文档 | 这一段发生了什么 |
+| --- | --- |
+| [Docker 安装](docs/10-docker-installation.md) | 官方 APT 失败，Ubuntu 源安装成功 |
+| [镜像仓库超时](docs/11-docker-registry-troubleshooting.md) | hello-world 超时，机制尚未证实 |
+| [离线容器](docs/12-offline-container-build.md) | scratch 与静态 BusyBox |
+| [Compose 测试](docs/13-docker-compose.md) | 本地编排、退出码 0、清理测试容器 |
+| [目录规划](docs/14-docker-directory-layout.md) | `/srv/docker` 的权限和边界 |
+| [第一个网页](docs/15-first-web-service.md) | hello-web 与 SSH 隧道 |
+| [跨架构计划](docs/16-cross-architecture-plan.md) | ARM64 到 AMD64，尚未测试 |
+
+示例在构建前要自己准备静态 BusyBox，仓库里没有那份二进制：
+
+- [离线 Hello](examples/docker/offline-hello/README.md)
+- [hello-web](examples/docker/hello-web/README.md)
+
 ## 文档
 
 按迁移顺序读，就是上面的故事。按问题跳，用这张表。
@@ -179,9 +224,16 @@ Phase 1 完成的定义：Mac 执行 `ssh xin-server`，进入的是升级并重
 | [笔记本当服务器](docs/06-laptop-as-server.md) | 合盖、logind、实际测试过的范围 |
 | [自动检测与认证](docs/07-auto-network-auth.md) | 定时器设计、权限、还没实测的那一段 |
 | [系统更新与重启](docs/08-system-maintenance.md) | apt、tmux、socket activation、新内核 |
-| [踩坑总结](docs/09-lessons-learned.md) | 可以带走的判断，不含新的操作 |
-| [Roadmap](ROADMAP.md) | Phase 2，以及只讨论过的朋友访问 |
-| [安全说明](SECURITY.md) | 脱敏、权限的边界、不能公开的东西 |
+| [踩坑总结](docs/09-lessons-learned.md) | Phase 1 结束时可以带走的判断 |
+| [Docker 安装](docs/10-docker-installation.md) | 官方源失败，Ubuntu 源安装成功 |
+| [镜像仓库超时](docs/11-docker-registry-troubleshooting.md) | Docker Hub 仍未打通 |
+| [离线容器](docs/12-offline-container-build.md) | 本地 scratch 镜像 |
+| [Compose 测试](docs/13-docker-compose.md) | V2 编排与测试容器清理 |
+| [目录规划](docs/14-docker-directory-layout.md) | `/srv/docker` |
+| [第一个网页](docs/15-first-web-service.md) | hello-web 与 Mac 浏览器 |
+| [跨架构计划](docs/16-cross-architecture-plan.md) | 尚未测试的镜像传输 |
+| [Roadmap](ROADMAP.md) | 已完成的 Phase 2，以及还没做的服务 |
+| [安全说明](SECURITY.md) | 脱敏、Docker 端口和 docker 组 |
 
 可抄走之前先替换占位符的示例：
 
@@ -190,25 +242,27 @@ Phase 1 完成的定义：Mac 执行 `ssh xin-server`，进入的是升级并重
 - [网络检测 service](examples/systemd/network-check.service)
 - [网络检测 timer](examples/systemd/network-check.timer)
 - [认证检查脚本模板](examples/scripts/captive-portal-check.sh)，占位符未替换时会拒绝运行
+- [离线 Hello 镜像](examples/docker/offline-hello/README.md)，构建前要准备静态 BusyBox
+- [hello-web](examples/docker/hello-web/README.md)，端口只绑定在回环地址
 
 ## 安全
 
 公开版本使用占位符：`<CAMPUS_WIFI_SSID>`、`<SERVER_TAILSCALE_IP>`、`<WIFI_MAC_ADDRESS>`、`<AUTH_ENDPOINT>`。
 
-校园网账号、密码、真实内网地址、MAC、Tailscale 地址、SSH 私钥和带凭据的 URL 都不在仓库里。服务器上的凭据目录是 root-only，这种权限不能消除磁盘镜像和 HTTPS GET 查询日志的风险。Tailscale 设备在线也不会自动获得 shell。
+校园网账号、密码、真实内网地址、MAC、Tailscale 地址、SSH 私钥和带凭据的 URL 都不在仓库里。服务器上的凭据目录是 root-only，这种权限不能消除磁盘镜像和 HTTPS GET 查询日志的风险。Tailscale 设备在线也不会自动获得 shell。hello-web 只绑在 `127.0.0.1:8080`，Docker 的发布端口不能靠一句“以后再配 UFW”就算保护好了。
 
 完整约束见 [SECURITY.md](SECURITY.md)。
 
 ## 下一步
 
-Phase 2 才安装 Docker Engine，再用 Compose 跑服务，然后补监控、备份和告警。朋友 Mac 的访问曾经讨论过方案，设备共享和登录都还没有做。
+Phase 2 已经把 Docker Engine、Compose、本地镜像和第一个网页做完。Docker Hub 的直接访问还没恢复。下一步是把 Linux AMD64 镜像从另一台机器送到 Ubuntu，这一步还没测试。数据库、API、备份和监控仍未开始。朋友 Mac 的访问曾经讨论过方案，设备共享和登录都还没有做。
 
-认证自然过期后的自动恢复，仍是 Phase 1 里唯一打开的验证项。
+认证自然过期后的自动恢复，仍是 Phase 1 里打开的验证项。
 
 细节和不会提前打勾的清单见 [ROADMAP.md](ROADMAP.md)。
 
 ## 这个仓库会继续更新
 
-Phase 1 的文档停在 Docker 之前。以后每做完一段，就追加文档和状态，而不是回去把计划改写成既成事实。命令、配置和报错以当时的记录为准。示例和叙述分开：叙述保留这台 `xin-server` 的真实路径，示例使用脱敏后的通用文件名。
+Phase 1 的文档停在 Docker 安装之前，那些篇目不再改写成后来已经装了 Docker。Phase 2 用新的文档追加。以后每做完一段，就同样追加，而不是回去把计划改写成既成事实。命令、配置和报错以当时的记录为准。示例和叙述分开：叙述保留这台 `xin-server` 的真实路径，示例使用脱敏后的文件，BusyBox 二进制不进仓库。
 
 有报错需要更正时，直接改对应文档并在提交说明里写清楚。密钥和口令仍然不进 Git。

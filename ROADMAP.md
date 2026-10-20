@@ -4,7 +4,7 @@
 
 这个仓库跟着服务器一起长。已经发生的事写在 `docs/` 里，用完成时。还没做的事只写在这里，不用完成时。
 
-Phase 1 的边界很明确：Docker Engine 还没有安装。不要在旧文档里补一句“后来其实装过”。下一阶段会新开文档。
+Phase 1 文档的边界停在 Docker 安装之前。不要把 Phase 2 的容器回写成 Phase 1 里已经发生的事。Docker 的安装、离线镜像和第一张网页写在 Phase 2。
 
 ## Phase 1：Docker 之前
 
@@ -32,16 +32,37 @@ Phase 1 里已经搭好、但还没有闭环验证的一项：
 - 用防火墙把 22 端口收到 Tailscale 接口上
 - 给朋友的 Mac 授权
 
-## Phase 2：服务
+## Phase 2：Docker 与第一张网页
 
-下面都还没做。实施时再写新的文档，并更新 README 的状态清单。
+已经完成，记录在 `docs/10` 到 `docs/15`。
 
-- [ ] 安装 Docker Engine
-- [ ] 使用 Docker Compose 部署
-- [ ] 部署数据库、API 或其他长期运行的服务
-- [ ] 监控、备份和告警
+- [x] Docker Engine 安装（Ubuntu 源，`docker.io` 29.1.3，服务 active 且 enabled）
+- [x] Docker Compose V2 安装（2.40.3）
+- [x] Docker Buildx 安装（0.30.1）
+- [x] 离线 BusyBox 镜像构建
+- [x] 本地容器运行测试
+- [x] Compose 测试
+- [x] Docker 目录结构 `/srv/docker`
+- [x] 第一个持续运行的 Web 服务 hello-web
+- [x] Mac SSH Tunnel 浏览器访问 `http://localhost:18080`
 
-部署这些服务时沿用 [SECURITY.md](SECURITY.md) 的约束：数据库、Docker API 和管理端口不直接暴露到校园网。
+Docker 官方 APT 源和 Docker Hub 都没有变成可用通道。离线构建绕开了它们，没有修好它们。
+
+尚未完成：
+
+- [ ] Docker Hub 直接访问问题解决
+- [ ] ARM64 Mac → AMD64 Ubuntu 镜像传输
+- [ ] 真实应用镜像导入
+- [ ] PostgreSQL 部署
+- [ ] Redis 部署
+- [ ] 个人 API 服务
+- [ ] 数据持久化与备份
+- [ ] 监控和告警
+- [ ] 更完善的容器权限与网络安全配置
+
+跨架构传输只写了计划，命令都还没跑，见 [docs/16-cross-architecture-plan.md](docs/16-cross-architecture-plan.md)。
+
+后续服务仍然沿用 [SECURITY.md](SECURITY.md)：数据库、Docker API 和管理端口不直接暴露到校园网。hello-web 只绑定了 `127.0.0.1:8080`。
 
 ## 讨论过、尚未执行
 
@@ -55,16 +76,17 @@ Phase 1 里已经搭好、但还没有闭环验证的一项：
 
 ## 明确不在本次记录里的事
 
-这些如果将来要做，也只能源于新的实施记录，不能回写成 Phase 1 已经发生：
+这些如果将来要做，也只能源于新的实施记录，不能回写成更早的阶段已经发生：
 
 - NVIDIA 驱动
 - 本地大模型运行时
-- 某一款具体数据库的正式上线
-- 已经在跑的容器
+- PostgreSQL、Redis 或个人 API 的正式上线
 - 定时备份任务
 - 完整的防火墙加固
 - 正式的多用户共享
 - 公网域名
+
+Phase 1 结束时还没有容器。Phase 2 的 hello-web 单独记录，不回写进 Phase 1。
 
 ## 文档怎么跟着更新
 

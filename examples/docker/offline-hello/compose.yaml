@@ -1,0 +1,8 @@
+# Same service definition used for the local Compose test.
+# restart is quoted: an unquoted YAML "no" is a boolean, not a restart policy.
+services:
+  hello:
+    image: xin-offline-hello:1
+    pull_policy: never
+    network_mode: none
+    restart: "no"

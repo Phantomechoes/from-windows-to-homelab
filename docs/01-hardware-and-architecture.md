@@ -48,7 +48,7 @@ flowchart LR
   Server -.-> Next["下一阶段 Docker"]
 ```
 
-虚线的那一格是计划，不是现状。
+虚线的那一格是 Phase 1 结束时还没做的事。Phase 2 已经装上 Docker，当时的访问路径见 [第一个网页](15-first-web-service.md)。
 
 ## 从服务器到互联网，再回到 SSH
 
@@ -84,6 +84,8 @@ flowchart TD
 
 ## 这张图里还没有的东西
 
-防火墙的收口、多用户、容器、数据库、备份，都还没做。把它们画进“当前架构”会让以后的排查走错层。当前线上的管理面就是：校园网连通性、Tailscale、OpenSSH、以及两个 systemd 配置（合盖、认证检测）。
+防火墙的收口、多用户、容器、数据库、备份，在 Phase 1 结束时都还没做。上面的图停在那个时刻：校园网连通性、Tailscale、OpenSSH，以及两个 systemd 配置（合盖、认证检测）。
+
+Phase 2 后来在本机回环地址上跑起一个 Web 容器，并用 SSH 隧道从 Mac 打开。那部分见 [第一个网页](15-first-web-service.md)。防火墙收口、数据库和备份仍然没做。
 
 下一篇进入安装介质和磁盘：[Ubuntu 安装](02-ubuntu-installation.md)。

@@ -1,0 +1,14 @@
+# Core Compose file used for the long-running page.
+# The host publishes 8080 on loopback only. It is not open on the campus LAN.
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 64m
+    ports:
+      - "127.0.0.1:8080:8080"

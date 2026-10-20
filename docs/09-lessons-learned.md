@@ -77,6 +77,6 @@ ssh -i ~/.ssh/id_ed25519_xinserver dev@<SERVER_TAILSCALE_IP>
 
 ## 还没做的事不要提前打勾
 
-Docker Engine、Compose、数据库、API、监控、备份、告警，都还没装。朋友 Mac 的 Tailscale 共享和单独 Linux 用户，只讨论过。防火墙把 SSH 收到 Tailscale 接口、关闭密码登录，也还没做。
+写这一篇时，Docker Engine、Compose、数据库、API、监控、备份、告警都还没装。朋友 Mac 的 Tailscale 共享和单独 Linux 用户，只讨论过。防火墙把 SSH 收到 Tailscale 接口、关闭密码登录，也还没做。
 
-这些放在 [Roadmap](../ROADMAP.md)。Phase 1 的完成线是：一台合得上盖子的 Ubuntu Server，可以从 Mac 用 `ssh xin-server` 管起来。
+这些放在 [Roadmap](../ROADMAP.md)。Phase 1 的完成线是：一台合得上盖子的 Ubuntu Server，可以从 Mac 用 `ssh xin-server` 管起来。Docker 及其后的第一张网页从 [Docker 安装](10-docker-installation.md) 另起，不改写上面的判断。

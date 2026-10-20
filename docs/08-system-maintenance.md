@@ -73,6 +73,6 @@ sudo apt upgrade
 - 检测定时器在跑
 - 升级和重启之后，内核是 `7.0.0-38-generic`，远程入口还在
 
-Docker Engine 没有安装。下一阶段从它开始，而不是从补装一个桌面开始。
+写到这里时，Docker Engine 还没有安装。下一阶段从它开始，而不是从补装一个桌面开始。后来的安装记录在 [Docker 安装](10-docker-installation.md)，不回写进这一篇。
 
 可以带走的判断集中在最后一篇：[踩坑总结](09-lessons-learned.md)。
