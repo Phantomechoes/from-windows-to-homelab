@@ -1,0 +1,22 @@
+# Sanitized example of the Netplan file that brought wlo1 up.
+# Replace <CAMPUS_WIFI_SSID> on the server. Do not commit the filled-in copy.
+#
+# This shape matters:
+# - renderer is networkd, matching the backend that rejected "match".
+# - The key is the real interface name from `ip -br addr` (here, wlo1).
+# - There is no match: and no set-name:. Those keys produced
+#   "networkd backend does not support wifi with match".
+# - The empty access-point mapping means an open SSID, not "no authentication
+#   at all". A captive portal can still sit on top of this link.
+# - optional: true lets boot continue when this Wi-Fi is absent, instead of
+#   sitting in network wait-online the way the first unconfigured boot did.
+
+network:
+  version: 2
+  renderer: networkd
+  wifis:
+    wlo1:
+      dhcp4: true
+      optional: true
+      access-points:
+        "<CAMPUS_WIFI_SSID>": {}

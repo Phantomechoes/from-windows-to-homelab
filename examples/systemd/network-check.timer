@@ -1,0 +1,19 @@
+# Sanitized timer. On xin-server the live unit is bjtu-autologin.timer.
+# enable/start this timer, not the oneshot service.
+#
+# OnBootSec waits 2 minutes after boot.
+# OnUnitActiveSec arms the next run 10 minutes after the previous run starts.
+# AccuracySec lets systemd delay the wake by up to 1 minute.
+# These three values match the timer that was enabled on the server.
+# Persistent= was not part of the recorded unit.
+
+[Unit]
+Description=Check campus internet access after boot and every 10 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

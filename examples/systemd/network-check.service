@@ -1,0 +1,16 @@
+# Sanitized unit. On xin-server the live unit is bjtu-autologin.service
+# and the live script is /usr/local/sbin/bjtu-autologin-check.sh.
+# That script is not in this repository.
+#
+# A same-named timer (network-check.timer) starts this oneshot.
+# Do not put campus credentials in Environment=. The script must read them
+# from a root-only directory at runtime.
+
+[Unit]
+Description=Check external HTTPS and log in only when a captive portal is present
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/captive-portal-check.sh
