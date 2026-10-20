@@ -34,7 +34,7 @@ Phase 1 里已经搭好、但还没有闭环验证的一项：
 
 ## Phase 2：Docker 与第一张网页
 
-已经完成，记录在 `docs/10` 到 `docs/15`。
+引擎、离线镜像和第一张网页记录在 `docs/10` 到 `docs/15`。镜像传输和 Registry 记录在 `docs/16`、`docs/17`。
 
 - [x] Docker Engine 安装（Ubuntu 源，`docker.io` 29.1.3，服务 active 且 enabled）
 - [x] Docker Compose V2 安装（2.40.3）
@@ -46,21 +46,30 @@ Phase 1 里已经搭好、但还没有闭环验证的一项：
 - [x] 第一个持续运行的 Web 服务 hello-web
 - [x] Mac SSH Tunnel 浏览器访问 `http://localhost:18080`
 
-Docker 官方 APT 源和 Docker Hub 都没有变成可用通道。离线构建绕开了它们，没有修好它们。
+Docker 官方 APT 源没有变成可用的安装渠道。Docker Hub 的直连也没有修好。离线构建、文件传输和 AWS Public ECR 是另外三条已经试过的路。
+
+镜像获取的后续验证已经完成，记录在 [docs/16-cross-architecture-plan.md](docs/16-cross-architecture-plan.md) 和 [docs/17-registry-access-strategy.md](docs/17-registry-access-strategy.md)：
+
+- [x] Mac ARM64 → Ubuntu AMD64 镜像传输
+- [x] AMD64 镜像架构验证
+- [x] docker save / SCP / docker load
+- [x] 服务器运行 Mac 传输的 hello-world
+- [x] Docker Hub 通过 Mac SSH 代理成功拉取
+- [x] AWS Public ECR 无代理独立下载
+- [x] AWS Public ECR Nginx 容器执行验证
+
+经 Mac 的 Hub 代理是临时通道，drop-in 已经停用。它不计入 Docker Hub 直连。
 
 尚未完成：
 
-- [ ] Docker Hub 直接访问问题解决
-- [ ] ARM64 Mac → AMD64 Ubuntu 镜像传输
-- [ ] 真实应用镜像导入
+- [ ] Docker Hub 不经代理直接访问
+- [ ] GHCR 实际镜像拉取验证
 - [ ] PostgreSQL 部署
 - [ ] Redis 部署
 - [ ] 个人 API 服务
-- [ ] 数据持久化与备份
+- [ ] 容器数据备份
 - [ ] 监控和告警
-- [ ] 更完善的容器权限与网络安全配置
-
-跨架构传输只写了计划，命令都还没跑，见 [docs/16-cross-architecture-plan.md](docs/16-cross-architecture-plan.md)。
+- [ ] 生产级服务安全加固
 
 后续服务仍然沿用 [SECURITY.md](SECURITY.md)：数据库、Docker API 和管理端口不直接暴露到校园网。hello-web 只绑定了 `127.0.0.1:8080`。
 

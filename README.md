@@ -5,11 +5,12 @@
 一台 2021 年的旧笔记本，如何从混乱的 Windows 开发环境，变成可以通过 Mac 随时远程管理的 Ubuntu 服务器。
 
 [![Phase 2](https://img.shields.io/badge/phase-2_Docker_running-2f6f4e)](ROADMAP.md)
-[![Docker Hub](https://img.shields.io/badge/Docker_Hub-not_reachable-8a5a00)](docs/11-docker-registry-troubleshooting.md)
+[![Docker Hub](https://img.shields.io/badge/Docker_Hub_direct-still_blocked-8a5a00)](docs/11-docker-registry-troubleshooting.md)
+[![Public ECR](https://img.shields.io/badge/AWS_Public_ECR-pull_verified-2f6f4e)](docs/17-registry-access-strategy.md)
 [![Ubuntu Server](https://img.shields.io/badge/Ubuntu_Server-26.04.1_LTS-E95420)](docs/02-ubuntu-installation.md)
 [![Access](https://img.shields.io/badge/access-Tailscale_%2B_SSH-111111)](docs/05-remote-access.md)
 
-记录从 2026 年 10 月 20 日的 Phase 1 开始。Phase 1 把这台坏屏笔记本收成可以用 SSH 管理的 Ubuntu Server。Phase 2 已经装上 Docker，并在 Mac 浏览器里打开了服务器上的第一张网页。Docker Hub 仍然连不上。
+记录从 2026 年 10 月 20 日的 Phase 1 开始。Phase 1 把这台坏屏笔记本收成可以用 SSH 管理的 Ubuntu Server。Phase 2 已经装上 Docker，并在 Mac 浏览器里打开了服务器上的第一张网页。Docker Hub 直连仍然不行。服务器后来可以从 AWS Public ECR 自己拉取 AMD64 镜像。
 
 ---
 
@@ -128,7 +129,7 @@ flowchart TD
 
 Phase 1 完成的定义仍然有效：Mac 执行 `ssh xin-server`，进入的是升级并重启之后的 `dev@xin-server`，内核是 `7.0.0-38-generic`。合盖不断开这条会话。校园网检测定时器处于 active。
 
-Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Compose 已经跑通，Mac 浏览器通过 SSH 隧道打开了 hello-web。Docker Hub 的直接访问还没有恢复。
+Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Compose 已经跑通，Mac 浏览器通过 SSH 隧道打开了 hello-web。Docker Hub 的直接访问还没有恢复。AMD64 的 `hello-world` 已经从 Mac 传到服务器并运行。关闭临时代理之后，AWS Public ECR 上的 Nginx 镜像可以由 Ubuntu 自己拉取。
 
 - [x] Windows 备份与系统替换
 - [x] Ubuntu Server 安装
@@ -143,8 +144,12 @@ Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Com
 - [x] Docker Engine 安装
 - [x] Docker Compose V2 与 Buildx
 - [x] 离线镜像、Compose 测试和第一个网页
+- [x] Mac 到 Ubuntu 的 AMD64 镜像传输，以及 hello-world 运行
+- [x] Docker Hub 经 Mac SSH 代理拉取。这不是直连，临时代理已停用
+- [x] AWS Public ECR 无代理拉取，并执行 Nginx
 - [ ] 认证自然过期后的自动恢复完整实测
-- [ ] Docker Hub 直接访问
+- [ ] Docker Hub 不经代理的直接访问
+- [ ] GHCR 的实际镜像拉取
 - [ ] 数据库、API 等服务部署
 - [ ] 监控、备份和告警
 
@@ -175,13 +180,15 @@ Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Com
 
 我以为装上 Docker 就结束了。官方软件源在 `apt update` 时被对端重置，GPG 公钥却已经检查通过。换成 Ubuntu 官方源之后，引擎起来了：`docker.io` 29.1.3、Compose 2.40.3、Buildx 0.30.1。`docker` 服务是 `active (running)`，并且 enabled。
 
-然后 `sudo docker run --rm hello-world` 没有等到 Hello。本地没有镜像，解析 `docker.io/library/hello-world:latest` 时 `i/o timeout`。`registry-1.docker.io` 的解析结果不稳定，HTTPS 也超时。现象让人怀疑 DNS 或出去的路径有问题。证据不够把具体机制写成结论，所以 Docker Hub 保持未解决。引擎在运行，仓库连不上。这两句同时成立。
+然后 `sudo docker run --rm hello-world` 没有等到 Hello。本地没有镜像，解析 `docker.io/library/hello-world:latest` 时 `i/o timeout`。`registry-1.docker.io` 的解析结果不稳定，HTTPS 也超时。现象让人怀疑 DNS 或出去的路径有问题。证据不够把具体机制写成结论，所以 Docker Hub 直连保持未解决。引擎在运行，和 Docker Hub 直连不通，这两句到现在仍然同时成立。
 
 于是不再等外部镜像。Ubuntu 的 `busybox-static` 放进 `FROM scratch`，`--pull=false` 构建，`--network none` 运行，终端打出 `Hello from Docker on xin-server!`。Compose 用 `pull_policy: never` 把同一张镜像跑完，退出码是 0。那次测试容器随后删掉了。
 
 目录先定在 `/srv/docker`：`stacks`、`data`、`secrets`。引擎自己的数据仍在 `/var/lib/docker`。`data` 目录不是备份。
 
 第一个一直开着的服务是 hello-web。BusyBox 的 `httpd` 只发布在服务器的 `127.0.0.1:8080`。Mac 上执行 `ssh -N -L 18080:127.0.0.1:8080 xin-server`，浏览器打开 `http://localhost:18080`，看见了 **Welcome to xin-server**。隧道关掉，浏览器这条路就断。容器还在。校园网上没有这个 8080。
+
+后来又补上三条获取镜像的结果，详细过程不堆在这里。Mac 的 Docker Desktop 拉下 `linux/amd64` 的 `hello-world`，`docker save` 之后经 SCP 载入 Ubuntu，运行输出 `Hello from Docker!`。借 Mac 系统代理做的 SSH 反向隧道，让 Ubuntu 拉下过 `nginx:stable-alpine`，本机 `127.0.0.1:8081` 返回过 HTTP 200。这条代理随后停用。停用之后，Ubuntu 自己从 `public.ecr.aws/docker/library/nginx:latest` 下载镜像，`nginx -v` 输出 `nginx/1.31.7`。Docker Hub 直连仍未恢复，GHCR 也还没有做真实拉取。
 
 ```mermaid
 flowchart LR
@@ -197,12 +204,13 @@ flowchart LR
 | 文档 | 这一段发生了什么 |
 | --- | --- |
 | [Docker 安装](docs/10-docker-installation.md) | 官方 APT 失败，Ubuntu 源安装成功 |
-| [镜像仓库超时](docs/11-docker-registry-troubleshooting.md) | hello-world 超时，机制尚未证实 |
+| [镜像仓库超时](docs/11-docker-registry-troubleshooting.md) | 直连失败、临时代理、ECR 入口 |
 | [离线容器](docs/12-offline-container-build.md) | scratch 与静态 BusyBox |
 | [Compose 测试](docs/13-docker-compose.md) | 本地编排、退出码 0、清理测试容器 |
 | [目录规划](docs/14-docker-directory-layout.md) | `/srv/docker` 的权限和边界 |
 | [第一个网页](docs/15-first-web-service.md) | hello-web 与 SSH 隧道 |
-| [跨架构计划](docs/16-cross-architecture-plan.md) | ARM64 到 AMD64，尚未测试 |
+| [跨架构传输](docs/16-cross-architecture-plan.md) | hello-world 的 save、scp、load 已验证 |
+| [镜像获取策略](docs/17-registry-access-strategy.md) | ECR 独立拉取、Hub 代理、文件传输 |
 
 示例在构建前要自己准备静态 BusyBox，仓库里没有那份二进制：
 
@@ -226,12 +234,13 @@ flowchart LR
 | [系统更新与重启](docs/08-system-maintenance.md) | apt、tmux、socket activation、新内核 |
 | [踩坑总结](docs/09-lessons-learned.md) | Phase 1 结束时可以带走的判断 |
 | [Docker 安装](docs/10-docker-installation.md) | 官方源失败，Ubuntu 源安装成功 |
-| [镜像仓库超时](docs/11-docker-registry-troubleshooting.md) | Docker Hub 仍未打通 |
+| [镜像仓库超时](docs/11-docker-registry-troubleshooting.md) | Hub 直连未通，代理与 ECR 已分开验证 |
 | [离线容器](docs/12-offline-container-build.md) | 本地 scratch 镜像 |
 | [Compose 测试](docs/13-docker-compose.md) | V2 编排与测试容器清理 |
 | [目录规划](docs/14-docker-directory-layout.md) | `/srv/docker` |
 | [第一个网页](docs/15-first-web-service.md) | hello-web 与 Mac 浏览器 |
-| [跨架构计划](docs/16-cross-architecture-plan.md) | 尚未测试的镜像传输 |
+| [跨架构传输](docs/16-cross-architecture-plan.md) | AMD64 hello-world 已在服务器运行 |
+| [镜像获取策略](docs/17-registry-access-strategy.md) | 三条已验证路径和各自的限制 |
 | [Roadmap](ROADMAP.md) | 已完成的 Phase 2，以及还没做的服务 |
 | [安全说明](SECURITY.md) | 脱敏、Docker 端口和 docker 组 |
 
@@ -255,7 +264,7 @@ flowchart LR
 
 ## 下一步
 
-Phase 2 已经把 Docker Engine、Compose、本地镜像和第一个网页做完。Docker Hub 的直接访问还没恢复。下一步是把 Linux AMD64 镜像从另一台机器送到 Ubuntu，这一步还没测试。数据库、API、备份和监控仍未开始。朋友 Mac 的访问曾经讨论过方案，设备共享和登录都还没有做。
+Phase 2 已经把 Docker Engine、Compose、本地镜像、第一个网页、一次跨架构传输，以及 AWS Public ECR 的独立拉取做完。Docker Hub 不经代理的直接访问还没恢复。GHCR 只确认入口有响应。数据库、API、备份、监控和生产级加固仍未开始。朋友 Mac 的访问曾经讨论过方案，设备共享和登录都还没有做。
 
 认证自然过期后的自动恢复，仍是 Phase 1 里打开的验证项。
 

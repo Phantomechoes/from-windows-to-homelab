@@ -62,7 +62,7 @@ BusyBox 把常用的小工具做进一个可执行文件。`echo` 只是其中�
 
 动态链接的程序启动时要找 `ld-linux` 和 `libc`。scratch 镜像里没有这些文件，动态程序会在进 `main` 之前失败。静态二进制把需要的代码放在自己文件里，单独一个文件就能被内核执行。所以复制进 scratch 的是 `/usr/bin/busybox` 这份静态程序，而不是任意一个叫 busybox 的命令。
 
-这次二进制来自服务器自己的 Ubuntu 软件包。构建也发生在 `xin-server` 上。镜像内容和这台 amd64 机器是同一种架构。Mac 是 ARM64，但 Mac 没有参与这次构建。跨架构传输还没做，见 [后续计划](16-cross-architecture-plan.md)。
+这次二进制来自服务器自己的 Ubuntu 软件包。构建也发生在 `xin-server` 上。镜像内容和这台 amd64 机器是同一种架构。Mac 没有参与这次构建。后来的跨机器传输是另一件事，见 [跨架构传输](16-cross-architecture-plan.md)。
 
 ## --network none 证明的是什么
 

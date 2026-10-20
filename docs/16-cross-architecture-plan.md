@@ -1,106 +1,147 @@
-# 跨架构镜像：计划，还没有做
+# 跨架构镜像：hello-world 已经在 Ubuntu 上跑起来
 
-> **Planned / Not Yet Tested**
+> **Verified / Completed**：Mac 上下载 `linux/amd64` 的 `hello-world`，经 `docker save`、SCP 和 `docker load` 传到 `xin-server`，并成功运行。
 >
-> 这一篇里的命令都没有在这次迁移里执行。
-> 不要把它们读成已经成功的步骤。本次任务也不下载、不传输镜像。
+> 仍是计划、没有做成流程的部分：批量传输、在 Mac 上跨平台构建、给现有 Compose 项目加 `platform`。见文末。
 
 返回 [项目首页](../README.md)。上一篇：[第一个网页](15-first-web-service.md)。
 
-Mac 是 Apple Silicon，架构 ARM64。`xin-server` 是 x86_64，也就是 AMD64。Phase 2 的两张镜像都是在服务器上构建的，材料是 Ubuntu amd64 软件包里的静态 BusyBox。所以它们和服务器是同一种机器语言。Mac 没有参与构建，也还没有把一张镜像送上服务器。
+Mac 是 Apple Silicon，ARM64，装的是 Docker Desktop。`xin-server` 是 Ubuntu Server 26.04.1 LTS，x86_64，也就是 AMD64。Phase 2 最早的两张镜像是在服务器上用本机的静态 BusyBox 构建的，那两次没有跨架构。
 
-以后如果镜像只能从别处拿到，而 Docker Hub 在服务器上仍然打不开，一条可讨论的路是：在一台能够访问仓库的机器上，取 **Linux AMD64** 的镜像，再把归档传到 Ubuntu 上加载。这台 Mac 是候选，不是已经验证过的构建机。Mac 自己能不能打开 Docker Hub，这次没有测。
+后来这条传输链路单独做完了。官方 `hello-world` 的 AMD64 变体在 Mac 上下载，拷到 Ubuntu，打印出 `Hello from Docker!`。这和离线镜像那句 `Hello from Docker on xin-server!` 不是同一次运行。
 
-## 镜像上的平台，和 CPU 的平台
+## 平台是选出来的，不是翻译出来的
 
-容器里跑的是 Linux 程序，不是 macOS 程序。Docker 镜像的平台写成操作系统加架构，例如 `linux/arm64` 和 `linux/amd64`。
+容器里跑的是 Linux 程序，不是 macOS 程序。镜像平台写成操作系统加架构，例如 `linux/arm64` 和 `linux/amd64`。
 
-Mac 的芯片是 ARM64。如果在 Mac 上不加平台参数就拉取一个多平台镜像，客户端通常会拿 `linux/arm64`。把这张镜像加载到 AMD64 的 Ubuntu 上，内核会拒绝执行里面的程序。常见报错是 `exec format error`。那表示文件头里的机器类型和当前 CPU 不符。它不是网络超时，也不是权限问题。
+同一个标签背后常常是一份清单。清单里各有一张真正的镜像。Mac 的芯片是 ARM64，只说明这台机器自己执行程序时用 ARM64。它仍然可以向仓库要清单里的 `linux/amd64` 那一张。`--platform linux/amd64` 做的是这个选择。
 
-Phase 2 没有遇到这个报错，因为还没有跨机器搬运镜像。写在这里是为了以后避免把它误判成 Docker 坏了。
+它不会把 ARM64 二进制翻译成 AMD64。文件头里的机器类型还是下载时那一张的机器类型。选错张，Ubuntu 上就会出现 `exec format error`：内核看见的机器类型和当前 CPU 不符。那不是网络超时，也不是权限问题。这次没有碰到这个报错，因为保存前和加载后都核对了 `linux/amd64`。
 
-## 多平台镜像是一份清单
+Mac 上如果不加 `--platform`，客户端通常会拿 `linux/arm64`。把那张镜像加载到这台 AMD64 服务器上，就会走到上面的报错。加载之后还要再查一次，因为 `scp` 不改文件头，它只是把选错的文件原样送过去。
 
-很多官方镜像的同一个标签背后是一份清单，里面各有 `linux/amd64` 和 `linux/arm64` 的实际镜像。标签相同，内容可以不同。
+## 已经验证的流程
 
-所以只比较标签不够。要看这次拿到的那一层是什么架构。镜像 ID 标识的是具体那一层内容，比标签更接近“你到底加载了什么”。加载之后仍然要在服务器上再查一次平台，因为传输过程不改写文件头，但选错层会把错误的文件头原样送过去。
+命令在 Mac 上执行。Docker Desktop 当时能够完成这次拉取。Mac 终端里不走代理的 curl，访问 Docker Registry 仍然会超时。拉取成功依靠的是 Docker Desktop 自己的网络路径，不是“Mac 上的任意程序都能直连 Docker Hub”。直连问题写在 [镜像仓库排查](11-docker-registry-troubleshooting.md)。
 
-## 建议命令
-
-下面每一条都是 **Planned / Not Yet Tested**。把占位符换成真实镜像名之后才有意义。不要把产生的归档提交进 Git。
-
-在一台已经有 Docker 命令、并且能够访问镜像仓库的机器上，指定服务器需要的平台：
+下载：
 
 ```bash
-# Planned / Not Yet Tested
-docker pull --platform linux/amd64 <IMAGE>
+docker pull --platform linux/amd64 hello-world:latest
 ```
 
-Mac 要执行它，就得先有本地 Docker 环境。Docker Desktop 或其他引擎都还没作为这台 Mac 的已完成安装写进仓库。没有本地引擎，这条命令不存在。
-
-拉取之后先看平台，再打包：
+下载成功。核对的是 AMD64 那一层，而不是标签在 ARM Mac 上的默认层：
 
 ```bash
-# Planned / Not Yet Tested
-docker image inspect --format '{{.Os}}/{{.Architecture}}' <IMAGE>
-docker save <IMAGE> -o <IMAGE_ARCHIVE>.tar
+docker image inspect --platform linux/amd64 \
+  hello-world:latest \
+  --format '{{.Os}}/{{.Architecture}}'
 ```
 
-`docker save` 保存的是本地已经有的那张镜像。它不一定包含清单里的全部平台。如果上一步拿成了 `linux/arm64`，归档里就是 ARM64。`--platform linux/amd64` 是为了在保存之前把层选对。
+结果是：
 
-传到服务器再加载。SSH 别名沿用 `xin-server`，不写 Tailscale 地址：
+```text
+linux/amd64
+```
+
+导出时带上同一个平台，避免 tar 里装进 ARM64 层。文件大约 20KB，是这次 hello-world 的体积，不是所有镜像的体积：
 
 ```bash
-# Planned / Not Yet Tested
-scp <IMAGE_ARCHIVE>.tar xin-server:/tmp/<IMAGE_ARCHIVE>.tar
-ssh xin-server 'sudo docker load -i /tmp/<IMAGE_ARCHIVE>.tar'
+docker save --platform linux/amd64 \
+  -o ~/Downloads/hello-world-amd64.tar \
+  hello-world:latest
 ```
 
-加载完成后，在 Ubuntu 上再查一次，确认架构是 `amd64`，然后再运行：
+SCP 走已经配好的 `xin-server`。这条 SSH 在 Tailscale 上，地址不写进仓库：
 
 ```bash
-# Planned / Not Yet Tested
-sudo docker image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}}' <IMAGE>
+scp ~/Downloads/hello-world-amd64.tar xin-server:/home/dev/
 ```
 
-如果仓库支持，也可以在拉取前看清单里有哪些平台。这仍然需要能访问注册表，而 `xin-server` 当前访问 Docker Hub 是失败的。所以这条更可能用在那台负责拉取的机器上，而不是用在服务器上：
+在服务器上导入。命令是在 `dev` 的 shell 里执行的，`~` 先展开成 `/home/dev`，读到的就是刚传上来的文件：
 
 ```bash
-# Planned / Not Yet Tested
-docker buildx imagetools inspect <IMAGE>
+sudo docker load -i ~/hello-world-amd64.tar
 ```
 
-服务器上的 Buildx 版本是 0.30.1。版本在，不表示它能连上 Hub。
+输出：
 
-## Compose 里的 platform
+```text
+Loaded image: hello-world:latest
+```
 
-以后的 Compose 文件可以声明服务要的平台：
+服务器上再查一次架构：
+
+```bash
+sudo docker image inspect hello-world:latest \
+  --format '{{.Os}}/{{.Architecture}}'
+```
+
+结果仍是：
+
+```text
+linux/amd64
+```
+
+然后运行。`--pull=never` 让这次运行不再去联系 Docker Hub：
+
+```bash
+sudo docker run --rm --pull=never \
+  --platform linux/amd64 hello-world:latest
+```
+
+成功输出：
+
+```text
+Hello from Docker!
+```
+
+```mermaid
+flowchart LR
+  desk["Mac Docker Desktop"] --> pullNode["pull linux/amd64"]
+  pullNode --> saveNode["docker save 约 20KB tar"]
+  saveNode --> scpNode["scp 经已有 SSH"]
+  scpNode --> loadNode["Ubuntu docker load"]
+  loadNode --> runNode["Hello from Docker"]
+```
+
+tar 不进 Git。`.gitignore` 已经忽略 `*.tar`。
+
+## 核对顺序
+
+这次实际走通的顺序是：
+
+1. 拉取时写明 `--platform linux/amd64`。
+2. 保存前用带 `--platform` 的 `docker image inspect` 看 `Os` 和 `Architecture`。
+3. `docker save` 也带 `--platform linux/amd64`。
+4. `docker load` 之后在 Ubuntu 上再查一次。
+5. 用 `--pull=never` 和 `--platform linux/amd64` 运行。
+
+出现 `exec format error` 时，先回到第 2 步和第 4 步，而不是先怀疑守护进程。镜像 ID 比标签更接近“加载进来的到底是哪一层”。这次记录下来的结论是平台字符串 `linux/amd64`，没有把镜像 ID 抄进仓库。
+
+## Compose 里的 platform 还没加到正在跑的项目上
+
+以后的 Compose 文件可以声明：
 
 ```yaml
-# Planned / Not Yet Tested — 不要把这段当成已经部署的文件
+# Planned / Not Yet Tested — 不是 hello-web 正在使用的文件
 services:
   app:
     image: <IMAGE>
     platform: linux/amd64
 ```
 
-`platform: linux/amd64` 是给拉取和构建看的约束。hello-web 那份已经在跑的 Compose **没有**这个字段，因为它是在服务器上从本地文件构建的。不要回去改已运行的项目来“补上”一个还没测试的字段。
+`platform` 约束的是拉取和构建。hello-web 那份 Compose 没有这个字段，因为它是在服务器上从本地文件构建的。这次传输测试没有回头改它。
 
-如果 Compose 在一台 ARM64 的 Mac 上构建，却打算把结果拿到 AMD64 服务器运行，还要使用 Buildx 的跨平台构建。那也还没有测。Phase 2 避免了这个问题：构建发生在目标机器上。
+在 ARM64 的 Mac 上构建、再拿到 AMD64 服务器运行，还要 Buildx 的跨平台构建。那次构建没有做。`docker buildx imagetools inspect` 也没有作为这次验证的一步执行。
 
-## 怎么确认没有拿错
+## 还没做成流程的部分
 
-计划中的核对顺序是：
+下面这些保持 **Planned / Not Yet Tested**：
 
-1. 拉取时写明 `--platform linux/amd64`。
-2. 保存前用 `docker image inspect` 看 `Os` 和 `Architecture`。
-3. `docker load` 之后在 Ubuntu 上再查一次镜像 ID 和架构。
-4. 然后才 `docker run`。出现 `exec format error` 时，先回到第 2 步，而不是先怀疑守护进程。
+- 把 save、scp、load 收成可重复的脚本，或一次搬运多张镜像
+- 在 Mac 上用 Buildx 构建 `linux/amd64` 再传过去
+- 用 digest 固定镜像，而不是长期依赖 `latest`
+- 给新的 Compose 项目写上 `platform: linux/amd64` 并实际部署
 
-镜像归档可能很大，也可能在以后夹带不该公开的层。`.gitignore` 忽略 `*.tar`、`*.tar.gz` 和 `*.oci`。即使忽略规则漏了，也不要把归档加进提交。
-
-## 还没做的相邻事项
-
-Docker Hub 在服务器上的直接访问没有解决。真实应用镜像还没有导入。PostgreSQL、Redis、自己的 API、数据备份和监控都还没有部署。它们依赖“服务器能得到一张架构正确的镜像”，所以排在这次传输试验之后，而不是排在它前面冒充已经完成。
-
-进度见 [Roadmap](../ROADMAP.md)。
+hello-world 这条链路已经完成。它不表示 Docker Hub 在 Ubuntu 上可以直连，也不表示每张需要的镜像都已经在服务器上。另外两条获取路径，包括不经过 Mac 的 AWS Public ECR，写在 [镜像获取策略](17-registry-access-strategy.md)。

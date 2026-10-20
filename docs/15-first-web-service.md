@@ -162,4 +162,4 @@ flowchart LR
 - 没有 PostgreSQL、Redis 或自己的 API。
 - 没有备份，没有监控告警。
 - 容器权限只做到了上面这一组。换一个会写数据的服务时要重新看。
-- Mac 是 ARM64，服务器是 AMD64。这次镜像是在服务器上用它自己的 BusyBox 构建的，所以还没有碰到跨架构。下一篇只写计划：[跨架构传输](16-cross-architecture-plan.md)。
+- Mac 是 ARM64，服务器是 AMD64。这一章的镜像是在服务器上用它自己的 BusyBox 构建的。后来的跨架构传输已经单独验证，见 [跨架构传输](16-cross-architecture-plan.md)。

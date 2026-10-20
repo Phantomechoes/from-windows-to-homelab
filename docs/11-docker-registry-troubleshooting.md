@@ -69,6 +69,77 @@ Google 的 DNS-over-HTTPS 也超时，说明“换一个解析渠道再问一次
 
 ## 这一章结束时还留着的问题
 
-Docker Hub 的直接访问仍然没有解决。后面的离线镜像、Compose 测试和网页，都是在不拉取 Hub 镜像的前提下做的。它们证明本机能构建和运行容器，不证明 `hello-world` 现在可以拉下来。
+Docker Hub 的直接访问仍然没有解决。后面的离线镜像、Compose 测试和网页，都是在不拉取 Hub 镜像的前提下做的。它们证明本机能构建和运行容器，不证明 `hello-world` 现在可以从 Hub 直连拉下来。
 
-下一篇记录绕开注册表的那次构建：[离线容器](12-offline-container-build.md)。
+按时间往下读，下一篇是绕开注册表的那次构建：[离线容器](12-offline-container-build.md)。
+
+第一张网页跑起来之后，直连问题又查了一轮。下面是后来的记录，不是把前面的超时改写成已经修好。
+
+## 指定 IP 之后，连接仍被重置
+
+校园 DNS 多次返回过归属异常的 Docker Registry 地址。后来的 DNS-over-HTTPS 查询里也出现过可疑结果。这些地址没有抄进仓库。一份当时看起来不对的地址，过几天既不能当证据，也不能当修复。
+
+接着用 curl 的 `--resolve` 把域名钉在选定的地址上再访问。HTTPS 还是被重置。所以这次不能说“换成正确的 DNS 答案就会通”。解析可疑，和指定地址后仍然失败，是两件并列的观察。
+
+仍然不能确定全部原因是 DNS、校园出口策略、TLS 路径，还是目标地址自己在变。不把这写成已经证实的 DNS 污染，也不写成校园网的某一种主动封锁。
+
+## Mac 上谁能连上 Hub
+
+Mac 的 Docker Desktop 可以拉取 `linux/amd64` 镜像。同一台 Mac 的终端如果直接 curl Docker Registry，请求超时。
+
+Desktop 使用的是 macOS 系统代理，代理监听在 Mac 自己的回环地址上。Desktop 内部还能看到 `http.docker.internal:3128`。那是它自己环境里的名字，Ubuntu 上没有这个地址。把它写进服务器的 Docker 配置，不会变成一条可用的代理。
+
+在 Mac 上让 curl 走系统代理访问 `https://registry-1.docker.io/v2/`，响应是两层：
+
+```text
+HTTP/1.1 200 Connection established
+HTTP/2 401
+```
+
+第一行是 HTTP 代理把 TLS 隧道建好了。第二行是 Registry 的 `/v2/` 在要求认证。未登录时拿到 401，表示服务有响应，不是这次要消除的超时。
+
+## 反向隧道只是把 Mac 的出口借给 Ubuntu
+
+测试时在 Mac 上保持这条命令。端口是这次临时选的，不是通用默认值：
+
+```bash
+ssh -N -T -o ExitOnForwardFailure=yes \
+  -R 127.0.0.1:18719:127.0.0.1:20719 \
+  xin-server
+```
+
+Ubuntu 的 `127.0.0.1:18719` 经 SSH 和 Tailscale 到达 Mac 的 `127.0.0.1:20719`，再进入 Mac 上的那份代理。从 Ubuntu 用这个本地端口访问 Registry，同样收到 HTTP 401。
+
+然后给 Docker 写了一份临时 systemd drop-in，把 `HTTP_PROXY` 和 `HTTPS_PROXY` 指到 `http://127.0.0.1:18719`。`systemctl daemon-reload` 只让 systemd 重新读单元。环境变量要进入已经在跑的 `dockerd`，还重启了一次 Docker。
+
+重启之后，在 Ubuntu 上执行：
+
+```bash
+sudo docker pull --platform linux/amd64 nginx:stable-alpine
+```
+
+各层都下载完成。用这张镜像起了测试容器，Ubuntu 本地的 `http://127.0.0.1:8081` 返回 HTTP 200。hello-web 的 8080 没有被这个测试换掉。
+
+这条 `docker pull` 是在服务器上敲的。数据包的出口仍是 Mac。Mac 上的 SSH 或系统代理一停，这条路就断。它是临时通道，不是 Ubuntu 自己连上了 Docker Hub。验证下一条独立路径之前，drop-in 已改名为 `.disabled`，再次 `daemon-reload` 并重启 Docker。检查输出是 `No Docker proxy configured`。
+
+```mermaid
+flowchart LR
+  daemon[Ubuntu dockerd] --> ubuntuPort["Ubuntu 127.0.0.1:18719"]
+  ubuntuPort --> reverseFwd[SSH 反向转发]
+  reverseFwd --> tailnet[Tailscale]
+  tailnet --> macPort["Mac 127.0.0.1:20719"]
+  macPort --> hub[Docker Hub]
+```
+
+## 不走代理时，另外两个 Registry 的入口
+
+代理确认关掉之后，在 Ubuntu 上直接查入口：
+
+```bash
+curl -4 --noproxy '*' -I https://ghcr.io/v2/
+curl -4 --noproxy '*' -I https://public.ecr.aws/v2/
+```
+
+`--noproxy '*'` 用来避免环境变量里还留着代理。GHCR 返回 `HTTP/2 405`，说明对方有 HTTP 响应，但没有接着做镜像拉取。ECR 返回 `HTTP/2 401`，和上面的 Registry 认证响应是同一类信号。
+
+随后不使用代理，从 AWS Public ECR 拉下了 `public.ecr.aws/docker/library/nginx:latest`，架构是 `linux/amd64`，`nginx -v` 输出 `nginx/1.31.7`。这是服务器自己的下载。Docker Hub 直连仍未恢复。三条路的差别和限制写在 [镜像获取策略](17-registry-access-strategy.md)。Mac 把镜像打成文件再传过来的那次验证写在 [跨架构传输](16-cross-architecture-plan.md)。
