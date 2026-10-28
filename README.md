@@ -4,13 +4,15 @@
 
 一台 2021 年的旧笔记本，如何从混乱的 Windows 开发环境，变成可以通过 Mac 随时远程管理的 Ubuntu 服务器。
 
-[![Phase 2](https://img.shields.io/badge/phase-2_Docker_running-2f6f4e)](ROADMAP.md)
+[![Phase 5](https://img.shields.io/badge/phase-5_remote_development-2f6f4e)](ROADMAP.md)
 [![Docker Hub](https://img.shields.io/badge/Docker_Hub_direct-still_blocked-8a5a00)](docs/11-docker-registry-troubleshooting.md)
 [![Public ECR](https://img.shields.io/badge/AWS_Public_ECR-pull_verified-2f6f4e)](docs/17-registry-access-strategy.md)
 [![Ubuntu Server](https://img.shields.io/badge/Ubuntu_Server-26.04.1_LTS-E95420)](docs/02-ubuntu-installation.md)
 [![Access](https://img.shields.io/badge/access-Tailscale_%2B_SSH-111111)](docs/05-remote-access.md)
 
 记录从 2026 年 10 月 20 日的 Phase 1 开始。Phase 1 把这台坏屏笔记本收成可以用 SSH 管理的 Ubuntu Server。Phase 2 已经装上 Docker，并在 Mac 浏览器里打开了服务器上的第一张网页。Docker Hub 直连仍然不行。服务器后来可以从 AWS Public ECR 自己拉取 AMD64 镜像。
+
+2026-10-28 补记 Phase 3–5：服务器开始承载多服务工作负载，运行监控、采样与备份；经历过失联和一次主机重启后的恢复；Mac 上的开发入口从 Cursor 延伸到了 Codex。新增经历按补充的操作记录整理，本次文档维护没有连接服务器复测。缺少原始输出的细节在各篇中标为待核实。
 
 ---
 
@@ -28,7 +30,7 @@ Docker 还在下一章。这一章把地基打完。
 
 ## 这个仓库是做什么的
 
-把一台几乎不再使用 Windows 的旧笔记本，装成一台可以用 Mac 远程管理的 Ubuntu Server，并把已经发生的步骤、报错和取舍记下来，供以后的自己和遇到类似情况的人查阅。Phase 1 停在 Docker 之前。Phase 2 记录引擎、离线镜像和第一个网页。
+把一台几乎不再使用 Windows 的旧笔记本，装成一台可以用 Mac 远程管理的 Ubuntu Server，并把已经发生的步骤、报错和取舍记下来，供以后的自己和遇到类似情况的人查阅。Phase 1 停在 Docker 之前，Phase 2 记录引擎、离线镜像和第一个网页；Phase 3–5 另起文章，记录持续工作负载、故障恢复和远程开发。
 
 文档同时是三种东西：一段迁移故事，一份可以对照命令的 Linux 记录，以及一个还会继续更新的工程仓库。没有发生过的操作不会写成已经完成。
 
@@ -108,9 +110,27 @@ flowchart TD
 
 图里的 Docker 节点是下一阶段。Phase 1 结束时，它还没有安装。这三张图保持当时的样子。Docker 跑起来之后的路径在下面的 Phase 2。
 
+后续阶段补成了下面这条路径。Mac 负责编辑和控制，Ubuntu 承载 Docker、kind 和远程执行端。单节点集群仍与这台旧笔记本共用故障边界。Codex 出网时借用 Mac 回环代理的反向转发，单独画在 [Codex 远程开发](docs/21-codex-ssh-remote-development.md) 中。
+
+```mermaid
+flowchart LR
+  Mac["Mac：终端、Cursor、Codex 桌面"] --> Tailnet["Tailscale"]
+  Tailnet --> SSH["SSH / Ubuntu OpenSSH"]
+  subgraph Server["Ubuntu xin-server"]
+    SSH --> Dev["远程工程与 Codex CLI / app-server"]
+    Dev --> Sandbox["执行组件与默认 Linux 沙箱"]
+    SSH --> Docker["Docker Engine"]
+    Docker --> Kind["kind 单节点 Kubernetes"]
+    Kind --> Workloads["应用、实验数据库、Prometheus"]
+    Kind --> Jobs["CronJob"]
+    Cron["Ubuntu cron"] --> Archives["采样、归档、备份"]
+    Jobs --> Archives
+  end
+```
+
 ## 时间线
 
-钟点没有逐条记下。下面是 2026-10-20 这次记录里，事情实际发生的顺序。
+Phase 1 的钟点没有逐条记下。下面保留 2026-10-20 这次记录里，事情实际发生的顺序；后来的故障时间线见 Phase 4。
 
 1. 重要文件备份完成。Windows 几乎不用，决定整机改成 Linux 服务器。
 2. 在 Windows 上用 Rufus 4.15 把 Ubuntu Server 26.04.1 LTS 写进 32GB U 盘。
@@ -127,9 +147,11 @@ flowchart TD
 
 ## 现在到哪了
 
-Phase 1 完成的定义仍然有效：Mac 执行 `ssh xin-server`，进入的是升级并重启之后的 `dev@xin-server`，内核是 `7.0.0-38-generic`。合盖不断开这条会话。校园网检测定时器处于 active。
+Phase 1 的完成线保留在当时：Mac 执行 `ssh xin-server`，进入升级并重启之后的 `dev@xin-server`，核对过内核 `7.0.0-38-generic`。外接电源下合盖，会话保持；校园网检测定时器处于 active。这不是本次重新检查的系统快照。
 
 Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Compose 已经跑通，Mac 浏览器通过 SSH 隧道打开了 hello-web。Docker Hub 的直接访问还没有恢复。AMD64 的 `hello-world` 已经从 Mac 传到服务器并运行。关闭临时代理之后，AWS Public ECR 上的 Nginx 镜像可以由 Ubuntu 自己拉取。
+
+Phase 3 已经在 kind 单节点集群里承载多服务应用，运行实验数据库、Prometheus、node-exporter，并使用 cron 与 CronJob 做采样、归档和备份。Phase 4 恢复了主机重启后的服务可用性，也修复了两个 MongoDB Pod 的目录权限问题；异常停机的根因尚未完全查明。Phase 5 记录 Cursor Remote SSH，以及 Codex 从网络和认证一路排查到默认沙箱内执行 `pwd`、`ls` 成功的过程。
 
 - [x] Windows 备份与系统替换
 - [x] Ubuntu Server 安装
@@ -147,13 +169,23 @@ Phase 2 在此之上：Docker 服务为 `active (running)`，本地镜像和 Com
 - [x] Mac 到 Ubuntu 的 AMD64 镜像传输，以及 hello-world 运行
 - [x] Docker Hub 经 Mac SSH 代理拉取。这不是直连，临时代理已停用
 - [x] AWS Public ECR 无代理拉取，并执行 Nginx
+- [x] kind 单节点 Kubernetes 与真实多服务工作负载
+- [x] 实验数据库、Prometheus、node-exporter 运行
+- [x] cron / CronJob 采样、归档、备份及 SHA256 校验
+- [x] 一次故障后的服务可用性恢复，重要成果另存 Mac
+- [x] Cursor Remote SSH 开发
+- [x] Codex 远程认证、模型响应与默认沙箱内命令执行
 - [ ] 认证自然过期后的自动恢复完整实测
 - [ ] Docker Hub 不经代理的直接访问
 - [ ] GHCR 的实际镜像拉取
-- [ ] 数据库、API 等服务部署
-- [ ] 监控、备份和告警
+- [ ] 个人 PostgreSQL、Redis、个人 API 正式上线
+- [ ] 主机异常停机根因查明
+- [ ] 完整的定期异机备份、恢复演练和告警机制
+- [ ] 生产级监控与完整安全加固
 
 “检测 Timer 已完成”指的是定时器已启用、状态为 active、并且在网络正常时会退出。它还不等于“断网后一定能自己认证回来”。
+
+新阶段的完成项也有范围：实验组件运行不等于个人服务正式上线，一次恢复不等于所有故障都能自动恢复，数据库可响应也不等于全部数据一致性已经验证。
 
 ## 十个坑
 
@@ -217,6 +249,24 @@ flowchart LR
 - [离线 Hello](examples/docker/offline-hello/README.md)
 - [hello-web](examples/docker/hello-web/README.md)
 
+## Phase 3：从能运行容器，到承载持续工作负载
+
+第一张网页之后，我让服务器承载了一项科研实验。公开日志只写基础设施：Docker 上的 kind 单节点集群、多服务之间的访问、数据库、Prometheus 和定时任务。MySQL 5.7 曾内存不足，后来在实验里改用 MariaDB；这不是整台服务器的系统数据库升级。
+
+采样、归档和备份开始运行以后，指标保存多久、文件有没有复制成功，也都成了需要检查的问题。细节在 [持续运行的工作负载](docs/18-kubernetes-and-server-workloads.md)，研究算法和原始数据不放在这里。
+
+## Phase 4：失联之后，回到显示器和键盘前
+
+最后活动记录在 2026-10-24 06:47:46 UTC 左右，系统在 2026-10-26 08:34:55 UTC 重新启动。期间 Mac SSH 超时，Tailscale 显示服务器不可连接。我到了实验室，通过本地显示器和键盘重新调查。
+
+kind 节点恢复 Ready，绝大部分工作负载自动回来；两个 MongoDB Pod 却因目录权限进入 CrashLoopBackOff。先备份 emptyDir 数据、核对身份和权限，再做最小调整，最后检查数据库响应、业务读请求和自动采样。服务恢复了，停机根因还没有结案。经过和不能盲目执行的命令在 [故障恢复](docs/19-server-outage-and-recovery.md)。
+
+## Phase 5：Mac 的编辑器在换，执行环境留在 Ubuntu
+
+Cursor Remote SSH 让我从 Mac 打开 Ubuntu 工程，借助 Agent / Grok 读文件、调试容器和整理记录。Cursor 使用期结束后，服务器上的项目和定时任务仍在。经历在 [Cursor 远程开发](docs/20-cursor-remote-development.md)。
+
+换到 Codex 后，又依次遇到 HTTPS 超时、非交互 PATH、残留 app-server、缺少执行组件和默认沙箱启动失败。借 Mac 的回环代理经 SSH 反向转发出网，完成设备授权，再补齐组件和 bubblewrap，最后默认沙箱内的 `pwd`、`ls` 才真正执行成功。架构与分层验收在 [Codex 远程开发](docs/21-codex-ssh-remote-development.md)。
+
 ## 文档
 
 按迁移顺序读，就是上面的故事。按问题跳，用这张表。
@@ -241,8 +291,12 @@ flowchart LR
 | [第一个网页](docs/15-first-web-service.md) | hello-web 与 Mac 浏览器 |
 | [跨架构传输](docs/16-cross-architecture-plan.md) | AMD64 hello-world 已在服务器运行 |
 | [镜像获取策略](docs/17-registry-access-strategy.md) | 三条已验证路径和各自的限制 |
-| [Roadmap](ROADMAP.md) | 已完成的 Phase 2，以及还没做的服务 |
-| [安全说明](SECURITY.md) | 脱敏、Docker 端口和 docker 组 |
+| [持续运行的工作负载](docs/18-kubernetes-and-server-workloads.md) | Phase 3：kind、多服务、实验数据库、监控与定时备份 |
+| [服务器失联与恢复](docs/19-server-outage-and-recovery.md) | Phase 4：时间线、证据边界、emptyDir 与权限恢复 |
+| [Cursor 远程开发](docs/20-cursor-remote-development.md) | Phase 5：Mac 编辑、Ubuntu 执行与断线排查 |
+| [Codex 远程开发](docs/21-codex-ssh-remote-development.md) | Phase 5：代理、SSH、认证、组件和默认沙箱 |
+| [Roadmap](ROADMAP.md) | Phase 1–5 的验证范围与待办 |
+| [安全说明](SECURITY.md) | 脱敏、网络边界、数据与远程执行权限 |
 
 可抄走之前先替换占位符的示例：
 
@@ -258,13 +312,15 @@ flowchart LR
 
 公开版本使用占位符：`<CAMPUS_WIFI_SSID>`、`<SERVER_TAILSCALE_IP>`、`<WIFI_MAC_ADDRESS>`、`<AUTH_ENDPOINT>`。
 
-校园网账号、密码、真实内网地址、MAC、Tailscale 地址、SSH 私钥和带凭据的 URL 都不在仓库里。服务器上的凭据目录是 root-only，这种权限不能消除磁盘镜像和 HTTPS GET 查询日志的风险。Tailscale 设备在线也不会自动获得 shell。hello-web 只绑在 `127.0.0.1:8080`，Docker 的发布端口不能靠一句“以后再配 UFW”就算保护好了。
+校园网账号、密码、真实内网地址、MAC、Tailscale 地址、SSH 私钥和带凭据的 URL 都不在仓库里。服务器上的凭据目录是 root-only，这种权限不能消除磁盘镜像和 HTTPS GET 查询日志的风险。Tailscale 设备在线也不会自动获得 shell。hello-web 只绑在 `127.0.0.1:8080`，Docker 的发布端口不能靠一句“以后再配 UFW”就算保护好了。新增阶段同样不收录 Codex 认证缓存、授权码、研究数据、数据库备份或未脱敏日志，代理端口只写占位符。
 
 完整约束见 [SECURITY.md](SECURITY.md)。
 
 ## 下一步
 
-Phase 2 已经把 Docker Engine、Compose、本地镜像、第一个网页、一次跨架构传输，以及 AWS Public ECR 的独立拉取做完。Docker Hub 不经代理的直接访问还没恢复。GHCR 只确认入口有响应。数据库、API、备份、监控和生产级加固仍未开始。朋友 Mac 的访问曾经讨论过方案，设备共享和登录都还没有做。
+接下来优先补齐这次故障暴露出来的验证：继续调查停机根因，明确临时卷与重要数据的存储边界，建立定期异机备份和恢复演练，再补上告警与完整安全加固。实验里的监控和备份已经运行，不能因此把这些长期建设项目打勾。
+
+Docker Hub 直连、GHCR 的真实镜像拉取仍待验证；个人 PostgreSQL、Redis、个人 API 正式上线和朋友设备授权也保持未完成。Codex 的长期连接与故障后重连需要继续观察。
 
 认证自然过期后的自动恢复，仍是 Phase 1 里打开的验证项。
 
@@ -272,6 +328,6 @@ Phase 2 已经把 Docker Engine、Compose、本地镜像、第一个网页、一
 
 ## 这个仓库会继续更新
 
-Phase 1 的文档停在 Docker 安装之前，那些篇目不再改写成后来已经装了 Docker。Phase 2 用新的文档追加。以后每做完一段，就同样追加，而不是回去把计划改写成既成事实。命令、配置和报错以当时的记录为准。示例和叙述分开：叙述保留这台 `xin-server` 的真实路径，示例使用脱敏后的文件，BusyBox 二进制不进仓库。
+Phase 1 的文档停在 Docker 安装之前，那些篇目不再改写成后来已经装了 Docker。Phase 2 用新的文档追加；Phase 3–5 延续这一方式，早期章节中的“尚未开始”仍指各自当时的状态，当前进度看首页和路线图。阶段按主题组织，不给缺少记录的事件补造日期。命令、配置和报错以当时的记录为准。示例和叙述分开：通用路径可以保留，研究目录和数据不公开，BusyBox 二进制不进仓库。
 
 有报错需要更正时，直接改对应文档并在提交说明里写清楚。密钥和口令仍然不进 Git。
