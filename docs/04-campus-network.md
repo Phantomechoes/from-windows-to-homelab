@@ -148,3 +148,13 @@ TLS 阻止的是路径上的窃听。它不阻止接收方记日志，也不阻�
 - 当时分到的内网 IP 和网卡 MAC
 
 自动重试如果要做，必须避免把 URL 打进日志。设计见 [自动检测与认证](07-auto-network-auth.md)。在那之前，Tailscale 和 SSH 还得先走通，因为 Mac 和这台机器虽然都在校园网里，直连 SSH 却失败了：[远程访问](05-remote-access.md)。
+
+## 2026-11-02：校园网欠费充值后仍无法联网
+
+月初校园网余额不足，充值之后，Ubuntu 仍然访问不了互联网。当时 `wlo1` 显示 UP，已经获取 DHCP 地址和默认路由，外部 HTTPS 请求却超时。这又一次说明，要把 Wi-Fi 连接、DHCP 地址获取和校园网门户认证分成三个阶段：前两层正常，不代表门户已经放行；充值完成，也不等于这台设备已经重新完成认证。
+
+这次 `bjtu-autologin.timer` 处于 active，手动启动 service 也返回 `Result=success`。但日志反复显示 `Automatic login paused; check credentials.`，进一步确认脚本遇到 `/etc/bjtu-auth/paused` 会直接退出，并没有发起新的登录。
+
+确认充值完成后，我先停止 timer，把暂停标记改名保留，再手动启动一次认证 service。日志随后报告登录成功和互联网恢复，外部网站返回 HTTP 200。恢复 timer，并在必要时启动 `tailscaled` 后，Mac SSH 最终重新连接成功。具体命令和过程见 [自动检测与认证中的 2026-11-02 恢复记录](07-auto-network-auth.md)。
+
+暂停标记阻止登录已经确认，但标记最初产生的直接原因仍未完全验证。这是一次人工恢复成功的记录，不能据此认定以后欠费充值都能自动恢复。

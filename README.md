@@ -145,6 +145,12 @@ Phase 1 的钟点没有逐条记下。下面保留 2026-10-20 这次记录里，
 11. 校园网检测定时器运行，并记下 `Internet OK; no login required.`。认证自然过期后的自动重登还没有实测。
 12. `apt upgrade` 约 152 个包，在 tmux 里完成。重启后内核为 `7.0.0-38-generic`，`ssh xin-server` 再次成功。
 
+### 2026-11-02：校园网充值之后，手动恢复认证
+
+月初校园网余额不足，充值之后 Ubuntu 仍无法访问互联网。`wlo1` 已 UP，有 DHCP 地址和默认路由，但外部 HTTPS 请求超时。自动认证 timer 仍 active，手动启动 service 也返回 `Result=success`；真正拦住登录的是 `/etc/bjtu-auth/paused`，脚本检测到它就直接退出。
+
+确认充值完成后，我停止 timer、将暂停标记改名保留，再手动触发认证。日志随后出现登录成功和互联网恢复的记录，外部网站返回 HTTP 200；恢复 timer，并在必要时启动 `tailscaled` 后，Mac SSH 重新连接成功。经过和命令见 [自动认证恢复记录](docs/07-auto-network-auth.md)，网络分层的说明见 [校园网故障案例](docs/04-campus-network.md)。暂停标记最初产生的直接原因仍未完全验证，这次人工恢复也不改变“自动恢复尚未完整实测”的状态。
+
 ## 现在到哪了
 
 Phase 1 的完成线保留在当时：Mac 执行 `ssh xin-server`，进入升级并重启之后的 `dev@xin-server`，核对过内核 `7.0.0-38-generic`。外接电源下合盖，会话保持；校园网检测定时器处于 active。这不是本次重新检查的系统快照。
