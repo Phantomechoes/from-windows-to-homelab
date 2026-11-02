@@ -121,3 +121,58 @@ Internet OK; no login required.
 部署任何自动登录之前，先核对学校网络政策。政策不允许，就停在检测设计，不把凭据放进定时任务。
 
 网络能自己报“目前是通的”之后，剩下的是把系统更新做完，并确认重启后这条远程路还在：[系统更新与重启](08-system-maintenance.md)。
+
+## 2026-11-02：欠费充值后，认证还停在暂停标记上
+
+上面保留的是 Phase 1 当时的设计和验证边界。这一节追加 2026 年 11 月 2 日实际发生并已恢复的一次故障，不把人工恢复补写成自动恢复已经完成。
+
+月初校园网余额不足，充值之后，我发现 Ubuntu 仍然无法访问互联网。`wlo1` 显示 UP，已经拿到 DHCP 地址，也有默认路由，但外部 HTTPS 请求一直超时。无线和地址都在，门户认证后的互联网访问却还没有回来。
+
+先看定时任务，`bjtu-autologin.timer` 是 active。手动启动 `bjtu-autologin.service`，结果也是 `Result=success`，网络仍然没有恢复。再看 `journalctl`，反复出现的是：
+
+```text
+Automatic login paused; check credentials.
+```
+
+进一步确认，脚本检测到 `/etc/bjtu-auth/paused` 后会直接退出。这就解释了为什么 timer 还在运行、service 也能成功结束，却没有重新登录：任务被触发了，但走到的是暂停分支，不是认证流程。`Result=success` 只说明这次服务按自己的退出状态正常结束，不能替代外部连通性验证。
+
+## 充值之后，保留标记再重试一次
+
+确认充值完成后，这次恢复按下面的顺序执行：
+
+```bash
+sudo systemctl stop bjtu-autologin.timer
+sudo mv /etc/bjtu-auth/paused /etc/bjtu-auth/paused.before-retry-20261102
+sudo systemctl start bjtu-autologin.service
+```
+
+先停 timer，避免定时触发和人工重试交错。随后把暂停标记改名保留，再手动启动一次 service。`paused.before-retry-20261102` 是这次恢复留下的副本名，不是认证脚本的新配置，也没有把“忽略暂停标记”写进脚本。
+
+这次日志随后出现：
+
+```text
+BJTU login API reports success.
+Internet restored successfully.
+```
+
+再访问外部网站，得到 HTTP 200，网络恢复。接口报告成功和外部访问恢复，这次分别看到了结果，没有只凭 service 的 `Result=success` 就结束排查。
+
+网络恢复后，重新启动自动认证 timer：
+
+```bash
+sudo systemctl start bjtu-autologin.timer
+```
+
+远程管理还需要 `tailscaled` 在运行；必要时再启动它：
+
+```bash
+sudo systemctl start tailscaled
+```
+
+最终，Mac 上的 SSH 重新连接成功。上面的命令记录的是当天已经完成的恢复操作，本次文档维护没有再次登录服务器执行它们。
+
+## 这次证明了什么，仍没有证明什么
+
+暂停标记确实阻止了自动登录，这是本次确认的事实。但这个标记最初为什么产生，直接原因还没有完全验证。日志提示检查凭据，不能据此就断言密码错误，也不能把余额不足直接写成创建标记的唯一原因。
+
+这次验证通过的是：充值完成后，人工保留并移开暂停标记，重新触发认证，外部访问恢复，Mac SSH 也回来了。它不证明以后每次欠费充值都能自动恢复，也不补齐“认证自然过期后，无人干预地发现门户、重新认证并确认互联网恢复”的完整实测。上文和 README 中的自动恢复限制保持不变。
